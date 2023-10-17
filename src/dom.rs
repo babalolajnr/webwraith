@@ -64,7 +64,15 @@ impl Node {
         self.pretty_print_helper(0);
     }
 
-    /// Helper function for pretty-printing the DOM tree.
+    /// Helper function for pretty printing the DOM tree.
+    ///
+    /// This function takes in a reference to a `Node` and an `indent` value, which is used to determine
+    /// the amount of indentation to use when printing the node. The function then matches on the node's
+    /// `NodeType`, and prints the appropriate output based on the type of node. If the node is a `Text`
+    /// node, the function simply prints the text. If the node is an `Element` node, the function prints
+    /// the opening tag, recursively calls itself on each child node with an increased indentation level,
+    /// and then prints the closing tag. If the node is a `Comment` node, the function prints the comment
+    /// text surrounded by HTML comment tags.
     fn pretty_print_helper(&self, indent: usize) {
         match &self.node_type {
             NodeType::Text(text) => {
