@@ -35,10 +35,14 @@ impl Parser {
     /// # Returns
     ///
     /// A boolean value indicating whether the input starting from the current position matches the given byte slice.
-    fn starts_with(&self, s: &[u8]) -> bool {
-        self.input[self.current_position..]
+    fn starts_with(&self, s: &[u8]) -> Result<bool, &'static str> {
+        if self.current_position >= self.input.len() {
+            return Err("No more characters in input string");
+        }
+
+        Ok(self.input[self.current_position..]
             .as_bytes()
-            .starts_with(s)
+            .starts_with(s))
     }
 
     /// Returns true if the current position is at the end of the input.
@@ -47,7 +51,15 @@ impl Parser {
     }
 
     /// Consumes the next character in the input string and returns it.
-    /// If there are no more characters to consume, returns an error.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there are no more characters to consume.
+    ///
+    /// # Returns
+    ///
+    /// Returns the next character in the input string.
+    ///
     fn consume_char(&mut self) -> Result<char, &'static str> {
         let mut iter = self.input[self.current_position..].char_indices();
         let (_, current_char) = iter.next().ok_or("Failed to get next character")?;
@@ -85,7 +97,7 @@ impl Parser {
             match self.next_char() {
                 Ok(c) if condition(c) => result.push(self.consume_char()?),
                 Ok(_) => break,
-                Err(_) => return Err("Failed to get next character"),
+                Err(_) => break,
             }
         }
 
@@ -291,7 +303,7 @@ impl Parser {
         loop {
             self.consume_whitespace()?;
 
-            if self.eof() || self.starts_with(b"</") {
+            if self.eof() || self.starts_with(b"</")? {
                 break;
             }
 
@@ -323,5 +335,188 @@ impl Parser {
         } else {
             Ok(elem("html".to_string(), HashMap::new(), nodes))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_next_char() {
+        let mut parser = Parser {
+            current_position: 0,
+            input: String::from("hello"),
+        };
+
+        assert_eq!(parser.next_char(), Ok('h'));
+
+        parser.current_position = 1;
+        assert_eq!(parser.next_char(), Ok('e'));
+
+        parser.current_position = 5;
+        assert_eq!(
+            parser.next_char(),
+            Err("No more characters in input string")
+        );
+    }
+
+    #[test]
+    fn test_starts_with() {
+        let mut parser = Parser {
+            current_position: 0,
+            input: String::from("hello"),
+        };
+
+        assert!(parser.starts_with(b"hello").unwrap());
+
+        parser.current_position = 1;
+        assert!(parser.starts_with(b"ello").unwrap());
+
+        parser.current_position = 5;
+        assert!(parser.starts_with(b"hello").is_err());
+
+        parser.current_position = 6;
+        assert!(parser.starts_with(b"hello").is_err());
+    }
+
+    #[test]
+    fn test_eof() {
+        let mut parser = Parser {
+            current_position: 0,
+            input: String::from("hello"),
+        };
+
+        assert!(!parser.eof());
+
+        parser.current_position = 5;
+        assert!(parser.eof());
+    }
+
+    #[test]
+    fn test_consume_char() {
+        let mut parser = Parser {
+            current_position: 0,
+            input: String::from("hello"),
+        };
+
+        assert_eq!(parser.consume_char(), Ok('h'));
+        assert_eq!(parser.current_position, 1);
+
+        assert_eq!(parser.consume_char(), Ok('e'));
+        assert_eq!(parser.current_position, 2);
+
+        assert_eq!(parser.consume_char(), Ok('l'));
+        assert_eq!(parser.current_position, 3);
+
+        assert_eq!(parser.consume_char(), Ok('l'));
+        assert_eq!(parser.current_position, 4);
+
+        assert_eq!(parser.consume_char(), Ok('o'));
+        assert_eq!(parser.current_position, 5);
+
+        assert!(parser.consume_char().is_err());
+        assert_eq!(parser.current_position, 5);
+    }
+
+    #[test]
+    fn test_consume_while() {
+        let mut parser = Parser {
+            current_position: 0,
+            input: String::from("123abc"),
+        };
+
+        assert_eq!(
+            parser.consume_while(|c| c.is_numeric()),
+            Ok(String::from("123"))
+        );
+        assert_eq!(parser.current_position, 3);
+
+        assert_eq!(
+            parser.consume_while(|c| c.is_alphabetic()),
+            Ok(String::from("abc"))
+        );
+        assert_eq!(parser.current_position, 6);
+
+        assert_eq!(
+            parser.consume_while(|c| c.is_alphanumeric()),
+            Ok(String::from(""))
+        );
+        assert_eq!(parser.current_position, 6);
+    }
+
+    #[test]
+    fn test_consume_whitespace() {
+        let mut parser = Parser {
+            current_position: 0,
+            input: String::from("  \t\n\r"),
+        };
+
+        assert_eq!(parser.consume_whitespace(), Ok(()));
+        assert_eq!(parser.current_position, 5);
+
+        assert_eq!(parser.consume_whitespace(), Ok(()));
+        assert_eq!(parser.current_position, 5);
+    }
+
+    #[test]
+    fn test_parse_tag_name() {
+        let mut parser = Parser {
+            current_position: 0,
+            input: String::from("div"),
+        };
+
+        assert_eq!(parser.parse_tag_name(), Ok(String::from("div")));
+        assert_eq!(parser.current_position, 3);
+
+        parser.current_position = 0;
+        parser.input = String::from("123");
+        assert_eq!(parser.parse_tag_name(), Ok(String::from("123")));
+        assert_eq!(parser.current_position, 3);
+
+        parser.current_position = 0;
+        parser.input = String::from("div123");
+        assert_eq!(parser.parse_tag_name(), Ok(String::from("div123")));
+        assert_eq!(parser.current_position, 6);
+
+        parser.current_position = 0;
+        parser.input = String::from("div-123");
+        assert_eq!(parser.parse_tag_name(), Ok(String::from("div")));
+        assert_eq!(parser.current_position, 3);
+
+        // parser.current_position = 0;
+        // parser.input = String::from("div_123");
+        // assert_eq!(parser.parse_tag_name(), Ok(String::from("div_123")));
+        // assert_eq!(parser.current_position, 7);
+
+        // parser.current_position = 0;
+        // parser.input = String::from("div.123");
+        // assert_eq!(parser.parse_tag_name(), Ok(String::from("div")));
+        // assert_eq!(parser.current_position, 3);
+
+        // parser.current_position = 0;
+        // parser.input = String::from("div#123");
+        // assert_eq!(parser.parse_tag_name(), Ok(String::from("div")));
+        // assert_eq!(parser.current_position, 3);
+
+        // parser.current_position = 0;
+        // parser.input = String::from("div!123");
+        // assert_eq!(parser.parse_tag_name(), Ok(String::from("div")));
+        // assert_eq!(parser.current_position, 3);
+
+        // parser.current_position = 0;
+        // parser.input = String::from("div@123");
+        // assert_eq!(parser.parse_tag_name(), Ok(String::from("div")));
+        // assert_eq!(parser.current_position, 3);
+
+        // parser.current_position = 0;
+        // parser.input = String::from("div$123");
+        // assert_eq!(parser.parse_tag_name(), Ok(String::from("div")));
+        // assert_eq!(parser.current_position, 3);
+
+        // parser.current_position = 0;
+        // parser.input = String::from("div%123");
+        // assert_eq!(parser.parse_tag_name(), Ok(String::from("div")));
+        // assert_eq!(parser.current_position, 3);
     }
 }
