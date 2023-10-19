@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::dom::{elem, text, AttrMap, Node};
 
 /// A struct representing a parser for HTML.
+#[derive(Debug, PartialEq)]
 struct Parser {
     /// The current position of the parser.
     current_position: usize,
@@ -16,7 +17,7 @@ impl Parser {
     /// If there are no more characters in the input string, an error is returned.
     /// Otherwise, the next character is returned.
     fn next_char(&self) -> Result<char, &'static str> {
-        if self.current_position >= self.input.len() {
+        if self.eof() {
             return Err("No more characters in input string");
         }
 
@@ -36,7 +37,7 @@ impl Parser {
     ///
     /// A boolean value indicating whether the input starting from the current position matches the given byte slice.
     fn starts_with(&self, s: &[u8]) -> Result<bool, &'static str> {
-        if self.current_position >= self.input.len() {
+        if self.eof() {
             return Err("No more characters in input string");
         }
 
@@ -241,7 +242,7 @@ impl Parser {
         loop {
             self.consume_whitespace()?;
 
-            if self.next_char()? == '>' {
+            if self.eof() || self.next_char()? == '>' || self.next_char()? == '/' {
                 break;
             }
 
@@ -254,6 +255,9 @@ impl Parser {
 
     /// Parses an HTML attribute and returns a tuple containing the attribute name and value.
     ///
+    /// TODO: Parse attributes with no value (e.g. `<input disabled>`)
+    /// TODO: Parse attributes with no quotes (e.g. `<input type=text>`)
+    /// TODO: Parse attributes with multiple values (e.g. `<input class="form-input bg-green">`)
     /// # Returns
     ///
     /// A tuple containing the attribute name and value as strings.
@@ -484,39 +488,251 @@ mod tests {
         assert_eq!(parser.parse_tag_name(), Ok(String::from("div")));
         assert_eq!(parser.current_position, 3);
 
-        // parser.current_position = 0;
-        // parser.input = String::from("div_123");
-        // assert_eq!(parser.parse_tag_name(), Ok(String::from("div_123")));
-        // assert_eq!(parser.current_position, 7);
+        parser.current_position = 0;
+        parser.input = String::from("div_123");
+        assert_eq!(parser.parse_tag_name(), Ok(String::from("div")));
+        assert_eq!(parser.current_position, 3);
 
-        // parser.current_position = 0;
-        // parser.input = String::from("div.123");
-        // assert_eq!(parser.parse_tag_name(), Ok(String::from("div")));
-        // assert_eq!(parser.current_position, 3);
+        parser.current_position = 0;
+        parser.input = String::from("div.123");
+        assert_eq!(parser.parse_tag_name(), Ok(String::from("div")));
+        assert_eq!(parser.current_position, 3);
 
-        // parser.current_position = 0;
-        // parser.input = String::from("div#123");
-        // assert_eq!(parser.parse_tag_name(), Ok(String::from("div")));
-        // assert_eq!(parser.current_position, 3);
+        parser.current_position = 0;
+        parser.input = String::from("div#123");
+        assert_eq!(parser.parse_tag_name(), Ok(String::from("div")));
+        assert_eq!(parser.current_position, 3);
+    }
 
-        // parser.current_position = 0;
-        // parser.input = String::from("div!123");
-        // assert_eq!(parser.parse_tag_name(), Ok(String::from("div")));
-        // assert_eq!(parser.current_position, 3);
+    // #[test]
+    // fn test_parse_node() {
+    //     let mut parser = Parser {
+    //         current_position: 0,
+    //         input: String::from("<div>"),
+    //     };
 
-        // parser.current_position = 0;
-        // parser.input = String::from("div@123");
-        // assert_eq!(parser.parse_tag_name(), Ok(String::from("div")));
-        // assert_eq!(parser.current_position, 3);
+    //     assert_eq!(
+    //         parser.parse_node(),
+    //         Ok(elem("div".to_string(), HashMap::new(), vec![]))
+    //     );
+    //     assert_eq!(parser.current_position, 5);
 
-        // parser.current_position = 0;
-        // parser.input = String::from("div$123");
-        // assert_eq!(parser.parse_tag_name(), Ok(String::from("div")));
-        // assert_eq!(parser.current_position, 3);
+    //     parser.current_position = 0;
+    //     parser.input = String::from("hello");
+    //     assert_eq!(parser.parse_node(), Ok(text("hello".to_string())));
+    //     assert_eq!(parser.current_position, 5);
+    // }
 
-        // parser.current_position = 0;
-        // parser.input = String::from("div%123");
-        // assert_eq!(parser.parse_tag_name(), Ok(String::from("div")));
-        // assert_eq!(parser.current_position, 3);
+    #[test]
+    fn test_parse_text() {
+        let mut parser = Parser {
+            current_position: 0,
+            input: String::from("hello"),
+        };
+
+        assert_eq!(parser.parse_text(), Ok(text("hello".to_string())));
+        assert_eq!(parser.current_position, 5);
+    }
+
+    #[test]
+    fn test_parse_element() {
+        let mut parser = Parser {
+            current_position: 0,
+            input: String::from("<div></div>"),
+        };
+
+        assert_eq!(
+            parser.parse_element(),
+            Ok(elem("div".to_string(), HashMap::new(), vec![]))
+        );
+        assert_eq!(parser.current_position, 11);
+
+        parser.current_position = 0;
+        parser.input = String::from("<div>hello</div>");
+        assert_eq!(
+            parser.parse_element(),
+            Ok(elem(
+                "div".to_string(),
+                HashMap::new(),
+                vec![text("hello".to_string())]
+            ))
+        );
+        assert_eq!(parser.current_position, 16);
+
+        parser.current_position = 0;
+        parser.input = String::from("<div class=\"example\"></div>");
+        let mut attrs = HashMap::new();
+        attrs.insert("class".to_string(), "example".to_string());
+        assert_eq!(
+            parser.parse_element(),
+            Ok(elem("div".to_string(), attrs, vec![]))
+        );
+        assert_eq!(parser.current_position, 27);
+
+        parser.current_position = 0;
+        parser.input = String::from("<div class=\"example\" id=\"main\"></div>");
+        let mut attrs = HashMap::new();
+        attrs.insert("class".to_string(), "example".to_string());
+        attrs.insert("id".to_string(), "main".to_string());
+        assert_eq!(
+            parser.parse_element(),
+            Ok(elem("div".to_string(), attrs, vec![]))
+        );
+        assert_eq!(parser.current_position, 37);
+
+        parser.current_position = 0;
+        parser.input = String::from("<div class=\"example\" id=\"main\">hello</div>");
+        let mut attrs = HashMap::new();
+        attrs.insert("class".to_string(), "example".to_string());
+        attrs.insert("id".to_string(), "main".to_string());
+        assert_eq!(
+            parser.parse_element(),
+            Ok(elem(
+                "div".to_string(),
+                attrs,
+                vec![text("hello".to_string())]
+            ))
+        );
+        assert_eq!(parser.current_position, 42);
+    }
+
+    #[test]
+    fn test_parse_opening_tag() {
+        let mut parser = Parser {
+            current_position: 0,
+            input: String::from("<div>"),
+        };
+
+        assert_eq!(
+            parser.parse_opening_tag(),
+            Ok(("div".to_string(), HashMap::new()))
+        );
+        assert_eq!(parser.current_position, 5);
+
+        parser.current_position = 0;
+        parser.input = String::from("<div class=\"example\">");
+        let mut attrs = HashMap::new();
+        attrs.insert("class".to_string(), "example".to_string());
+        assert_eq!(parser.parse_opening_tag(), Ok(("div".to_string(), attrs)));
+        assert_eq!(parser.current_position, 21);
+
+        parser.current_position = 0;
+        parser.input = String::from("<div class=\"example\" id=\"main\">");
+        let mut attrs = HashMap::new();
+        attrs.insert("class".to_string(), "example".to_string());
+        attrs.insert("id".to_string(), "main".to_string());
+        assert_eq!(parser.parse_opening_tag(), Ok(("div".to_string(), attrs)));
+        assert_eq!(parser.current_position, 31);
+    }
+
+    #[test]
+    fn test_parse_closing_tag() {
+        let mut parser = Parser {
+            current_position: 0,
+            input: String::from("</div>"),
+        };
+
+        assert_eq!(parser.parse_closing_tag(), Ok("div".to_string()));
+        assert_eq!(parser.current_position, 6);
+    }
+
+    #[test]
+    fn test_parse_attributes() {
+        let mut parser = Parser {
+            current_position: 0,
+            input: String::from("class=\"example\""),
+        };
+
+        let mut attrs = HashMap::new();
+        attrs.insert("class".to_string(), "example".to_string());
+        assert_eq!(parser.parse_attributes(), Ok(attrs));
+        assert_eq!(parser.current_position, 15);
+
+        parser.current_position = 0;
+        parser.input = String::from("class=\"example\" id=\"main\"");
+        let mut attrs = HashMap::new();
+        attrs.insert("class".to_string(), "example".to_string());
+        attrs.insert("id".to_string(), "main".to_string());
+        assert_eq!(parser.parse_attributes(), Ok(attrs));
+        assert_eq!(parser.current_position, 25);
+    }
+
+    #[test]
+    fn test_parse_attribute() {
+        let mut parser = Parser {
+            current_position: 0,
+            input: String::from("class=\"example\""),
+        };
+
+        assert_eq!(
+            parser.parse_attribute(),
+            Ok(("class".to_string(), "example".to_string()))
+        );
+        assert_eq!(parser.current_position, 15);
+
+        parser.current_position = 0;
+        parser.input = String::from("class=\"example\" id=\"main\"");
+        assert_eq!(
+            parser.parse_attribute(),
+            Ok(("class".to_string(), "example".to_string()))
+        );
+        assert_eq!(parser.current_position, 15);
+    }
+
+    #[test]
+    fn test_parse_attr_value() {
+        let mut parser = Parser {
+            current_position: 0,
+            input: String::from("\"example\""),
+        };
+
+        assert_eq!(parser.parse_attr_value(), Ok("example".to_string()));
+        assert_eq!(parser.current_position, 9);
+    }
+
+    #[test]
+    fn test_parse_nodes() {
+        let mut parser = Parser {
+            current_position: 0,
+            input: String::from("<html><body><h1>Hello, world!</h1></body></html>"),
+        };
+
+        let nodes = vec![elem(
+            "html".to_string(),
+            HashMap::new(),
+            vec![elem(
+                "body".to_string(),
+                HashMap::new(),
+                vec![elem(
+                    "h1".to_string(),
+                    HashMap::new(),
+                    vec![text("Hello, world!".to_string())],
+                )],
+            )],
+        )];
+
+        assert_eq!(parser.parse_nodes(), Ok(nodes));
+        assert_eq!(parser.current_position, 48);
+    }
+
+    #[test]
+    fn test_parse() {
+        let source = String::from("<html><body><h1>Hello, world!</h1></body></html>");
+
+        let nodes = elem(
+            "html".to_string(),
+            HashMap::new(),
+            vec![elem(
+                "body".to_string(),
+                HashMap::new(),
+                vec![elem(
+                    "h1".to_string(),
+                    HashMap::new(),
+                    vec![text("Hello, world!".to_string())],
+                )],
+            )],
+        );
+
+        assert_eq!(Parser::parse(source), Ok(nodes));
     }
 }

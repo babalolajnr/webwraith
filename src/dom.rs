@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 /// Represents a node in the Document Object Model (DOM).
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Node {
     /// The child nodes of this node.
     pub children: Vec<Node>,
@@ -10,7 +10,7 @@ pub struct Node {
 }
 
 /// Represents the type of a node in the DOM tree.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum NodeType {
     /// A text node containing a string.
     Text(String),
@@ -21,7 +21,7 @@ pub enum NodeType {
 }
 
 /// Represents the data associated with an HTML element.
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ElementData {
     /// The name of the HTML tag.
     pub tag_name: String,
