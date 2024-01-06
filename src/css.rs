@@ -2,41 +2,41 @@ use crate::parser::Parser;
 
 /// Represents a CSS stylesheet, which contains a list of rules.
 pub struct Stylesheet {
-    rules: Vec<Rule>,
+    pub rules: Vec<Rule>,
 }
 
 /// A CSS rule containing a list of selectors and declarations.
 #[derive(Clone)]
-struct Rule {
-    selectors: Vec<Selector>,
-    declarations: Vec<Declaration>,
+pub struct Rule {
+    pub selectors: Vec<Selector>,
+    pub declarations: Vec<Declaration>,
 }
 
 /// Represents a CSS selector.
 #[derive(Clone)]
-enum Selector {
+pub enum Selector {
     /// A simple CSS selector.
     Simple(SimpleSelector),
 }
 
 /// A struct representing a simple CSS selector.
 #[derive(Clone)]
-struct SimpleSelector {
-    tag_name: Option<String>,
-    id: Option<String>,
-    class: Vec<String>,
+pub struct SimpleSelector {
+    pub tag_name: Option<String>,
+    pub id: Option<String>,
+    pub class: Vec<String>,
 }
 
 /// A struct representing a CSS declaration, consisting of a name and a value.
-#[derive(Clone)]
-struct Declaration {
-    name: String,
-    value: Value,
+#[derive(Clone, Debug)]
+pub struct Declaration {
+    pub name: String,
+    pub value: Value,
 }
 
 /// An enum representing different types of CSS values.
 #[derive(Clone, PartialEq, Debug)]
-enum Value {
+pub enum Value {
     /// A keyword value, represented as a string.
     Keyword(String),
     /// A length value, represented as a float and a unit.
@@ -47,13 +47,13 @@ enum Value {
 
 /// An enum representing different units of measurement used in CSS.
 #[derive(Clone, PartialEq, Debug)]
-enum Unit {
+pub enum Unit {
     Px,
 }
 
 /// A struct representing a color with red, green, blue, and alpha channels.
 #[derive(Clone, PartialEq, Debug)]
-struct Color {
+pub struct Color {
     r: u8,
     g: u8,
     b: u8,
@@ -353,7 +353,7 @@ pub fn parse(source: String) -> Result<Stylesheet, &'static str> {
 }
 
 impl Selector {
-    fn specificity(&self) -> Specificity {
+    pub fn specificity(&self) -> Specificity {
         let Selector::Simple(ref simple) = *self;
         let a = simple.id.iter().count();
         let b = simple.class.len();

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Represents a node in the Document Object Model (DOM).
 #[derive(Debug, PartialEq)]
@@ -92,3 +92,15 @@ impl Node {
     }
 }
 
+impl ElementData {
+    pub fn id(&self) -> Option<&String> {
+        self.attributes.get("id")
+    }
+
+    pub fn classes(&self) -> HashSet<&str> {
+        match self.attributes.get("class") {
+            Some(classlist) => classlist.split(' ').collect(),
+            None => HashSet::new(),
+        }
+    }
+}
