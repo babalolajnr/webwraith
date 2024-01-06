@@ -1,3 +1,5 @@
+use itertools::Itertools;
+
 use crate::{
     css::{Rule, Selector, SimpleSelector, Specificity, Stylesheet, Value},
     dom::{ElementData, Node, NodeType},
@@ -69,34 +71,17 @@ pub fn style_tree<'a>(root: &'a Node, stylesheet: &'a Stylesheet) -> StyledNode<
     }
 }
 
-/// Computes the matching rules for the given element and stylesheet.
-///
-/// # Arguments
-///
-/// * `elem` - The element to match rules against.
-/// * `stylesheet` - The stylesheet containing the rules.
-///
-/// # Returns
-///
-/// The matching rules for the element.
-///
-/// # Example
-///
-/// ```
-/// let mut rules = matching_rules(elem, stylesheet);
-/// ```
+/// Apply styles to an element based on the rules in the stylesheet.
 fn specified_values(elem: &ElementData, stylesheet: &Stylesheet) -> PropertyMap {
-    let mut values = HashMap::new();
-    let mut rules = matching_rules(elem, stylesheet);
+    let rules = matching_rules(elem, stylesheet);
 
-    // Go through the rules from lowest to highest specificity.
-    rules.sort_by(|&(a, _), &(b, _)| a.cmp(&b));
-    for (_, rule) in rules {
-        for declaration in &rule.declarations {
-            values.insert(declaration.name.clone(), declaration.value.clone());
-        }
-    }
-    values
+    // Iterate over the rules in order of specificity, highest first. Then 
+    rules
+        .into_iter()
+        .sorted_by(|&(a, _), &(b, _)| a.cmp(&b))
+        .flat_map(|(_, rule)| rule.declarations.iter())
+        .map(|declaration| (declaration.name.clone(), declaration.value.clone()))
+        .collect::<HashMap<_, _>>()
 }
 
 type MatchedRule<'a> = (Specificity, &'a Rule);
